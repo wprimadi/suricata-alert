@@ -16,7 +16,7 @@ Suricata Alert is a Go-based tool that monitors Suricata's `eve.json` log file a
 
 1. Clone the repository:
    ```sh
-   git clone https://github.com/yourusername/suricata-alert.git
+   git clone https://github.com/wprimadi/suricata-alert.git
    cd suricata-alert
    ```
 2. Build the application:
