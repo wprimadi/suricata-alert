@@ -9,9 +9,9 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
-	"time"
+	"sync"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/joho/godotenv"
 )
 
@@ -27,12 +27,7 @@ type SuricataAlert struct {
 	DestIP string `json:"dest_ip"`
 }
 
-func fileExists(filename string) bool {
-	_, err := os.Stat(filename)
-	return !os.IsNotExist(err)
-}
-
-func sendTelegramMessage(message string) error {
+func sendTelegramMessage(message string) {
 	telegramBotToken := os.Getenv("TELEGRAM_BOT_TOKEN")
 	telegramChatID := os.Getenv("TELEGRAM_CHAT_ID")
 
@@ -41,20 +36,33 @@ func sendTelegramMessage(message string) error {
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(data)))
 	if err != nil {
-		return err
+		log.Println("Error creating request:", err)
+		return
 	}
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		log.Println("Error sending message to Telegram:", err)
+		return
 	}
 	defer resp.Body.Close()
-
-	return nil
 }
 
-func tailFile(filePath string) {
+func processAlert(line string, severityThreshold int, hostname string, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	var alert SuricataAlert
+	if err := json.Unmarshal([]byte(line), &alert); err == nil {
+		if alert.EventType == "alert" && alert.Alert.Severity <= severityThreshold {
+			message := fmt.Sprintf("🚨 SECURITY ALERT! 🚨\n\n🖥️ %s\n\n⚠️ Category: %s\n🔴 Signature: %s\nPriority: %d\n💀 Source: %s\n🎯 Destination: %s\n🕒 Timestamp: %s",
+				hostname, alert.Alert.Category, alert.Alert.Signature, alert.Alert.Severity, alert.SrcIP, alert.DestIP, alert.Timestamp)
+			sendTelegramMessage(message)
+		}
+	}
+}
+
+func watchFile(filePath string) {
 	hostname, err := os.Hostname()
 	if err != nil {
 		hostname = "Unknown"
@@ -67,51 +75,64 @@ func tailFile(filePath string) {
 
 	file, err := os.Open(filePath)
 	if err != nil {
-		fmt.Println("Error opening file:", err)
-		return
+		log.Fatal("Error opening file:", err)
 	}
 	defer file.Close()
 
-	file.Seek(0, os.SEEK_END)
-
 	reader := bufio.NewReader(file)
+	var wg sync.WaitGroup
+
+	// Inisialisasi file watcher
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal("Error creating watcher:", err)
+	}
+	defer watcher.Close()
+
+	err = watcher.Add(filePath)
+	if err != nil {
+		log.Fatal("Error watching file:", err)
+	}
+
+	log.Println("Monitoring Suricata alerts...")
 	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			time.Sleep(time.Second)
-			continue
-		}
-
-		line = strings.TrimSpace(line)
-		var alert SuricataAlert
-		if err := json.Unmarshal([]byte(line), &alert); err == nil {
-			if alert.EventType == "alert" && alert.Alert.Severity <= severityThreshold {
-				fmt.Println(line)
-
-				message := fmt.Sprintf("🚨 SECURITY ALERT! 🚨\n\n🖥️ %s\n\n⚠️ Category: %s\n🔴 Signature: %s\nPriority: %d\n💀 Source: %s\n🎯 Destination: %s\n🕒 Timestamp: %s",
-					hostname, alert.Alert.Category, alert.Alert.Signature, alert.Alert.Severity, alert.SrcIP, alert.DestIP, alert.Timestamp)
-				err := sendTelegramMessage(message)
-				if err != nil {
-					log.Fatal(err.Error())
+		select {
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
+			if event.Op&fsnotify.Write == fsnotify.Write {
+				for {
+					line, err := reader.ReadString('\n')
+					if err != nil {
+						break
+					}
+					wg.Add(1)
+					go processAlert(line, severityThreshold, hostname, &wg)
 				}
 			}
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return
+			}
+			log.Println("Watcher error:", err)
 		}
 	}
+	wg.Wait()
 }
 
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal(err.Error())
-		os.Exit(1)
+	if err := godotenv.Load(); err != nil {
+		log.Fatal("Error loading .env file:", err)
+	}
+	eveFilePath := os.Getenv("EVE_FILE_PATH")
+	if eveFilePath == "" {
+		log.Fatal("EVE_FILE_PATH is not set in the environment")
 	}
 
-	fmt.Println("Starting Suricata Telegram Alert...")
-	eveFilePath := os.Getenv("EVE_FILE_PATH")
-	if fileExists(eveFilePath) {
-		tailFile(eveFilePath)
-	} else {
-		log.Fatal("Eve file does not exists")
-		os.Exit(1)
+	if _, err := os.Stat(eveFilePath); os.IsNotExist(err) {
+		log.Fatal("Eve log file does not exist")
 	}
+
+	watchFile(eveFilePath)
 }
