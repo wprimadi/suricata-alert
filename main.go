@@ -2,14 +2,13 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"strconv"
-	"sync"
+	"strings"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/joho/godotenv"
@@ -27,112 +26,98 @@ type SuricataAlert struct {
 	DestIP string `json:"dest_ip"`
 }
 
-func sendTelegramMessage(message string) {
+func sendTelegramMessage(message string) error {
 	telegramBotToken := os.Getenv("TELEGRAM_BOT_TOKEN")
 	telegramChatID := os.Getenv("TELEGRAM_CHAT_ID")
 
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", telegramBotToken)
 	data := fmt.Sprintf(`{"chat_id": "%s", "text": "%s"}`, telegramChatID, message)
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(data)))
+	req, err := http.NewRequest("POST", url, strings.NewReader(data))
 	if err != nil {
-		log.Println("Error creating request:", err)
-		return
+		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Println("Error sending message to Telegram:", err)
-		return
+		return err
 	}
 	defer resp.Body.Close()
+
+	return nil
 }
 
-func processAlert(line string, severityThreshold int, hostname string, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	var alert SuricataAlert
-	if err := json.Unmarshal([]byte(line), &alert); err == nil {
-		if alert.EventType == "alert" && alert.Alert.Severity <= severityThreshold {
-			message := fmt.Sprintf("🚨 SECURITY ALERT! 🚨\n\n🖥️ %s\n\n⚠️ Category: %s\n🔴 Signature: %s\nPriority: %d\n💀 Source: %s\n🎯 Destination: %s\n🕒 Timestamp: %s",
-				hostname, alert.Alert.Category, alert.Alert.Signature, alert.Alert.Severity, alert.SrcIP, alert.DestIP, alert.Timestamp)
-			sendTelegramMessage(message)
-		}
-	}
-}
-
-func watchFile(filePath string) {
-	hostname, err := os.Hostname()
-	if err != nil {
-		hostname = "Unknown"
-	}
-
-	severityThreshold, err := strconv.Atoi(os.Getenv("SEVERITY_THRESHOLD"))
-	if err != nil {
-		severityThreshold = 2
-	}
-
+func tailFile(filePath string) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		log.Fatal("Error opening file:", err)
 	}
 	defer file.Close()
 
+	file.Seek(0, os.SEEK_END)
 	reader := bufio.NewReader(file)
-	var wg sync.WaitGroup
 
-	// Inisialisasi file watcher
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			time.Sleep(time.Second)
+			continue
+		}
+		processLine(strings.TrimSpace(line))
+	}
+}
+
+func processLine(line string) {
+	var alert SuricataAlert
+	if err := json.Unmarshal([]byte(line), &alert); err == nil {
+		if alert.EventType == "alert" {
+			message := fmt.Sprintf("🚨 SECURITY ALERT! 🚨\n\n⚠️ Category: %s\n🔴 Signature: %s\nPriority: %d\n💀 Source: %s\n🎯 Destination: %s\n🕒 Timestamp: %s",
+				alert.Alert.Category, alert.Alert.Signature, alert.Alert.Severity, alert.SrcIP, alert.DestIP, alert.Timestamp)
+			sendTelegramMessage(message)
+		}
+	}
+}
+
+func watchFile(filePath string) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.Fatal("Error creating watcher:", err)
+		log.Fatal(err)
 	}
 	defer watcher.Close()
 
-	err = watcher.Add(filePath)
-	if err != nil {
-		log.Fatal("Error watching file:", err)
-	}
-
-	log.Println("Monitoring Suricata alerts...")
-	for {
-		select {
-		case event, ok := <-watcher.Events:
-			if !ok {
-				return
-			}
-			if event.Op&fsnotify.Write == fsnotify.Write {
-				for {
-					line, err := reader.ReadString('\n')
-					if err != nil {
-						break
-					}
-					wg.Add(1)
-					go processAlert(line, severityThreshold, hostname, &wg)
+	done := make(chan bool)
+	go func() {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
 				}
+				if event.Op&fsnotify.Write == fsnotify.Write {
+					tailFile(filePath)
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				log.Println("error:", err)
 			}
-		case err, ok := <-watcher.Errors:
-			if !ok {
-				return
-			}
-			log.Println("Watcher error:", err)
 		}
+	}()
+
+	if err := watcher.Add(filePath); err != nil {
+		log.Fatal(err)
 	}
-	wg.Wait()
+	<-done
 }
 
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Fatal("Error loading .env file:", err)
-	}
+	_ = godotenv.Load()
 	eveFilePath := os.Getenv("EVE_FILE_PATH")
-	if eveFilePath == "" {
-		log.Fatal("EVE_FILE_PATH is not set in the environment")
-	}
-
 	if _, err := os.Stat(eveFilePath); os.IsNotExist(err) {
-		log.Fatal("Eve log file does not exist")
+		log.Fatal("Eve file does not exist")
 	}
-
+	tailFile(eveFilePath)
 	watchFile(eveFilePath)
 }
