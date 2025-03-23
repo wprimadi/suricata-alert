@@ -24,7 +24,7 @@ type SuricataAlert struct {
 }
 
 // TailFile continuously reads the Suricata log file
-func TailFile(filePath string) {
+func TailFile(hostname string, filePath string, severity int) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		log.Fatal("Error opening file:", err)
@@ -44,9 +44,9 @@ func TailFile(filePath string) {
 		line = strings.TrimSpace(line)
 		var alert SuricataAlert
 		if err := json.Unmarshal([]byte(line), &alert); err == nil {
-			if alert.EventType == "alert" {
+			if alert.EventType == "alert" && alert.Alert.Severity <= severity {
 				log.Println("New Alert:", alert.Alert.Signature)
-				telegram.SendAlert(alert)
+				telegram.SendAlert(hostname, alert.Alert.Category, alert.Alert.Signature, alert.Alert.Severity, alert.SrcIP, alert.DestIP, alert.Timestamp)
 			}
 		}
 	}

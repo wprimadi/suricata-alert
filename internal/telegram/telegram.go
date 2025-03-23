@@ -15,7 +15,7 @@ type TelegramMessage struct {
 }
 
 // SendAlert sends an alert to Telegram
-func SendAlert(alert interface{}) {
+func SendAlert(hostname string, category string, signature string, severity int, source string, destination string, timestamp string) {
 	telegramBotToken := os.Getenv("TELEGRAM_BOT_TOKEN")
 	telegramChatID := os.Getenv("TELEGRAM_CHAT_ID")
 	if telegramBotToken == "" || telegramChatID == "" {
@@ -26,7 +26,7 @@ func SendAlert(alert interface{}) {
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", telegramBotToken)
 	message := TelegramMessage{
 		ChatID: telegramChatID,
-		Text:   fmt.Sprintf("🚨 SECURITY ALERT! 🚨\n\n%v", alert),
+		Text:   fmt.Sprintf("🚨 SECURITY ALERT! 🚨\n\n🖥️ %s\n\n⚠️ Category: %s\n🔴 Signature: %s\n⚡ Severity: %d\n💀 Source: %s\n🎯 Destination: %s\n🕒 Timestamp: %s", hostname, category, signature, severity, source, destination, timestamp),
 	}
 	data, _ := json.Marshal(message)
 

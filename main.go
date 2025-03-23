@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"suricata-alert/internal/config"
@@ -22,13 +23,24 @@ func main() {
 	logger.InitLogger()
 	log.Println("Starting Suricata Alert Bot...")
 
+	// Get current OS hostname
+	hostname, err := os.Hostname()
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
 	// Start monitoring Suricata logs
 	eveFilePath := os.Getenv("EVE_FILE_PATH")
 	if eveFilePath == "" {
 		log.Fatal("EVE_FILE_PATH is not set in environment variables")
 	}
 
-	go monitor.TailFile(eveFilePath)
+	severity, err := strconv.Atoi(os.Getenv("SEVERITY_THRESHOLD"))
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	go monitor.TailFile(hostname, eveFilePath, severity)
 
 	// Graceful shutdown
 	sigs := make(chan os.Signal, 1)
