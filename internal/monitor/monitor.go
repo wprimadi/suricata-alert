@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -36,30 +37,39 @@ func TailFile(hostname string, filePath string, severity int) {
 			continue
 		}
 
-		reader := bufio.NewReader(file)
-		defer file.Close()
-
-		file.Seek(0, io.SeekEnd)
-
-		for {
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				if errors.Is(err, io.EOF) {
-					stat, _ := os.Stat(filePath)
-					if stat == nil || stat.Size() < fileSize(filePath) {
-						log.Println("Log file rotated, reopening...")
-						break
-					}
-					time.Sleep(time.Second)
-					continue
-				}
-				log.Println("Error reading file:", err)
-				break
-			}
-
-			processLogLine(hostname, line, severity)
+		if err := tailLoop(file, filePath, hostname, severity); err != nil {
+			log.Println("Error in tail loop:", err)
 		}
+
+		file.Close()
 	}
+}
+
+func tailLoop(file *os.File, filePath, hostname string, severity int) error {
+	reader := bufio.NewReader(file)
+	file.Seek(0, io.SeekEnd)
+
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				if isLogRotated(filePath) {
+					log.Println("Log file rotated, reopening...")
+					return nil
+				}
+				time.Sleep(time.Second)
+				continue
+			}
+			return fmt.Errorf("error reading file: %w", err)
+		}
+
+		processLogLine(hostname, line, severity)
+	}
+}
+
+func isLogRotated(filePath string) bool {
+	stat, _ := os.Stat(filePath)
+	return stat == nil || stat.Size() < fileSize(filePath)
 }
 
 func fileSize(filePath string) int64 {
