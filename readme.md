@@ -49,6 +49,8 @@ Suricata Alert is a Go-based tool that monitors Suricata's `eve.json` log file a
    TELEGRAM_CHAT_ID=YOUR_TELEGRAM_CHAT_ID_HERE
    IGNORE_LOCAL_IP=true
    ENABLE_FIREWALL_BLOCKING=true
+   FIREWALL_ENGINE=iptables
+   WHITELIST_IP=103.122.205.88,103.65.100.194
    ```
 
 ## Usage
