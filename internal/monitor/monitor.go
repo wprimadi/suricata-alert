@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
+	"suricata-alert/internal/ip"
 	"suricata-alert/internal/telegram"
 )
 
@@ -43,10 +45,40 @@ func TailFile(hostname string, filePath string, severity int) {
 
 		line = strings.TrimSpace(line)
 		var alert SuricataAlert
+		var sendAlert bool = false
+
 		if err := json.Unmarshal([]byte(line), &alert); err == nil {
 			if alert.EventType == "alert" && alert.Alert.Severity <= severity {
-				log.Println("New Alert:", alert.Alert.Signature)
-				telegram.SendAlert(hostname, alert.Alert.Category, alert.Alert.Signature, alert.Alert.Severity, alert.SrcIP, alert.DestIP, alert.Timestamp)
+				if ip.IsLocalIP(alert.SrcIP) {
+					ignoreLocalIP, err := strconv.ParseBool(os.Getenv("IGNORE_LOCAL_IP"))
+					if err != nil {
+						sendAlert = true
+						log.Println("Invalid value for IGNORE_LOCAL_IP, defaulting to false. ", err)
+					} else {
+						if ignoreLocalIP {
+							sendAlert = false
+							log.Println("Ignored Telegram alert notification, source IP is local IP")
+						} else {
+							sendAlert = true
+						}
+					}
+				} else {
+					enableBlocking, err := strconv.ParseBool(os.Getenv("ENABLE_FIREWALL_BLOCKING"))
+					if err != nil {
+						log.Println("Invalid value for ENABLE_FIREWALL_BLOCKING, defaulting to false. ", err)
+					}
+
+					if enableBlocking {
+
+					}
+
+					sendAlert = true
+				}
+
+				if sendAlert {
+					log.Println("New Alert:", alert.Alert.Signature)
+					telegram.SendAlert(hostname, alert.Alert.Category, alert.Alert.Signature, alert.Alert.Severity, alert.SrcIP, alert.DestIP, alert.Timestamp)
+				}
 			}
 		}
 	}

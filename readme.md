@@ -4,17 +4,20 @@
 ![License](https://img.shields.io/github/license/wprimadi/suricata-alert)
 ![Stars](https://img.shields.io/github/stars/wprimadi/suricata-alert?style=social)
 
-Suricata Alert is a Go-based tool that monitors Suricata's `eve.json` log file and sends security alerts to a Telegram chat when an event meets the configured severity threshold.
+Suricata Alert is a Go-based tool that monitors Suricata's `eve.json` log file and sends security alerts to a Telegram chat when an event meets the configured severity threshold. It also supports optional IP blocking via firewall rules.
 
 ## Features
 - Monitors Suricata's `eve.json` file in real time
 - Filters alerts based on severity
 - Sends notifications to Telegram
+- Ignores alerts from local IP addresses (configurable)
+- Blocks source IPs that trigger alerts (except local IPs)
 
 ## Requirements
 - Go 1.18+
 - Suricata installed and generating `eve.json`
 - A Telegram bot and chat ID
+- Firewall tools (`iptables`/`ip6tables`) for IP blocking
 
 ## Installation
 
@@ -33,6 +36,8 @@ Suricata Alert is a Go-based tool that monitors Suricata's `eve.json` log file a
    SEVERITY_THRESHOLD=2
    TELEGRAM_BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN_HERE
    TELEGRAM_CHAT_ID=YOUR_TELEGRAM_CHAT_ID_HERE
+   IGNORE_LOCAL_IP=true
+   ENABLE_FIREWALL_BLOCKING=true
    ```
 
 ## Usage
@@ -41,19 +46,20 @@ Run the application:
 ```sh
 ./suricata-alert
 ```
-The program will monitor `eve.json` for new alerts and send notifications to Telegram if the severity is below or equal to the configured threshold.
+The program will monitor `eve.json` for new alerts and send notifications to Telegram if the severity is below or equal to the configured threshold. If `IGNORE_LOCAL_IP` is enabled, alerts from local IPs will be ignored. If `ENABLE_FIREWALL_BLOCKING` is enabled, source IPs causing alerts will be blocked via `iptables` or `ip6tables`.
 
 ## Environment Variables
-| Variable             | Description                                |
-|----------------------|--------------------------------------------|
-| `EVE_FILE_PATH`     | Path to Suricata's `eve.json` log file     |
-| `SEVERITY_THRESHOLD`| Maximum severity level to trigger alerts   |
-| `TELEGRAM_BOT_TOKEN`| Telegram bot API token                    |
-| `TELEGRAM_CHAT_ID`  | Telegram chat ID where alerts are sent     |
+| Variable                 | Description                                          |
+|--------------------------|------------------------------------------------------|
+| `EVE_FILE_PATH`         | Path to Suricata's `eve.json` log file              |
+| `SEVERITY_THRESHOLD`    | Maximum severity level to trigger alerts            |
+| `TELEGRAM_BOT_TOKEN`    | Telegram bot API token                              |
+| `TELEGRAM_CHAT_ID`      | Telegram chat ID where alerts are sent              |
+| `IGNORE_LOCAL_IP`       | If `true`, local IP alerts are ignored              |
+| `ENABLE_FIREWALL_BLOCKING` | If `true`, source IPs causing alerts are blocked  |
 
 ## License
 This project is licensed under the MIT License.
 
 ## Author
 Developed by Wahyu Primadi (@wprimadi).
-
