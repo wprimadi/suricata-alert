@@ -3,6 +3,7 @@ package ip
 import (
 	"log"
 	"net"
+	"os"
 	"os/exec"
 	"strings"
 )
@@ -66,4 +67,18 @@ func BlockIP(ip string) {
 			log.Printf("Blocked IPv6: %s", ip)
 		}
 	}
+}
+
+func GetWhitelistedIPs() map[string]bool {
+	whitelist := make(map[string]bool)
+	whitelistEnv := os.Getenv("WHITELIST_IP")
+
+	if whitelistEnv != "" {
+		ips := strings.Split(whitelistEnv, ",")
+		for _, ip := range ips {
+			whitelist[strings.TrimSpace(ip)] = true
+		}
+	}
+
+	return whitelist
 }

@@ -57,6 +57,7 @@ The program will monitor `eve.json` for new alerts and send notifications to Tel
 | `TELEGRAM_CHAT_ID`      | Telegram chat ID where alerts are sent              |
 | `IGNORE_LOCAL_IP`       | If `true`, local IP alerts are ignored              |
 | `ENABLE_FIREWALL_BLOCKING` | If `true`, source IPs causing alerts are blocked  |
+| `WHITELIST_IP`     | Comma-separated list of IPs that will not be blocked or alerted |
 
 ## License
 This project is licensed under the MIT License.

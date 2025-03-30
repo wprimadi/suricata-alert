@@ -49,6 +49,8 @@ func TailFile(hostname string, filePath string, severity int) {
 
 		if err := json.Unmarshal([]byte(line), &alert); err == nil {
 			if alert.EventType == "alert" && alert.Alert.Severity <= severity {
+				whitelist := ip.GetWhitelistedIPs()
+
 				if ip.IsLocalIP(alert.SrcIP) {
 					ignoreLocalIP, err := strconv.ParseBool(os.Getenv("IGNORE_LOCAL_IP"))
 					if err != nil {
@@ -63,16 +65,21 @@ func TailFile(hostname string, filePath string, severity int) {
 						}
 					}
 				} else {
-					enableBlocking, err := strconv.ParseBool(os.Getenv("ENABLE_FIREWALL_BLOCKING"))
-					if err != nil {
-						log.Println("Invalid value for ENABLE_FIREWALL_BLOCKING, defaulting to false. ", err)
-					}
+					if whitelist[alert.SrcIP] {
+						sendAlert = false
+						log.Printf("IP %s is whitelisted, skipping Telegram alert\n", alert.SrcIP)
+					} else {
+						enableBlocking, err := strconv.ParseBool(os.Getenv("ENABLE_FIREWALL_BLOCKING"))
+						if err != nil {
+							log.Println("Invalid value for ENABLE_FIREWALL_BLOCKING, defaulting to false. ", err)
+						}
 
-					if enableBlocking {
-						ip.BlockIP(alert.SrcIP)
-					}
+						if enableBlocking {
+							ip.BlockIP(alert.SrcIP)
+						}
 
-					sendAlert = true
+						sendAlert = true
+					}
 				}
 
 				if sendAlert {
