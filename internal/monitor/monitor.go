@@ -69,7 +69,7 @@ func TailFile(hostname string, filePath string, severity int) {
 					}
 
 					if enableBlocking {
-
+						ip.BlockIP(alert.SrcIP)
 					}
 
 					sendAlert = true
