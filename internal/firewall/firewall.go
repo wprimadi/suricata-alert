@@ -86,60 +86,62 @@ func blockIPUsingUfw(ip string, fwEngine string) {
 }
 
 func blockIPUsingIptables(ip string, fwEngine string) {
+	iptablesPath, ip6tablesPath, netfilterPath, err := getIptablesPaths()
+	if err != nil {
+		log.Println(err)
+		return
+	}
+
+	if net.ParseIP(ip).To4() != nil {
+		blockIP(ip, iptablesPath, fwEngine)
+	} else {
+		blockIP(ip, ip6tablesPath, fwEngine)
+	}
+
+	saveIptablesRules(netfilterPath)
+}
+
+// Fungsi untuk mendapatkan path dari iptables, ip6tables, dan netfilter-persistent
+func getIptablesPaths() (string, string, string, error) {
 	iptablesPath, err := exec.LookPath("iptables")
 	if err != nil {
-		log.Println("iptables not found in PATH")
-		return
+		return "", "", "", fmt.Errorf("iptables not found in PATH")
 	}
 
 	ip6tablesPath, err := exec.LookPath("ip6tables")
 	if err != nil {
-		log.Println("ip6tables not found in PATH")
-		return
+		return "", "", "", fmt.Errorf("ip6tables not found in PATH")
 	}
 
 	netfilterPath, err := exec.LookPath("netfilter-persistent")
 	if err != nil {
-		log.Println("netfilter-persistent not found in PATH")
+		return "", "", "", fmt.Errorf("netfilter-persistent not found in PATH")
+	}
+
+	return iptablesPath, ip6tablesPath, netfilterPath, nil
+}
+
+// Fungsi untuk memeriksa dan memblokir IP jika belum diblokir
+func blockIP(ip, iptablesPath, fwEngine string) {
+	checkCmd := exec.Command("sh", "-c", fmt.Sprintf("%s -C INPUT -s %s -j DROP", iptablesPath, ip))
+	if err := checkCmd.Run(); err == nil {
+		log.Printf("IP %s is already blocked", ip)
 		return
 	}
 
-	checkIPv4 := iptablesPath + " -C INPUT -s {IP} -j DROP"
-	blockIPv4 := iptablesPath + " -A INPUT -s {IP} -j DROP"
-	checkIPv6 := ip6tablesPath + " -C INPUT -s {IP} -j DROP"
-	blockIPv6 := ip6tablesPath + " -A INPUT -s {IP} -j DROP"
-
-	if net.ParseIP(ip).To4() != nil {
-		checkCmd := exec.Command("sh", "-c", strings.Replace(checkIPv4, "{IP}", ip, -1))
-		if err := checkCmd.Run(); err == nil {
-			log.Printf("IPv4 %s is already blocked", ip)
-			return
-		}
-
-		cmd := exec.Command("sh", "-c", strings.Replace(blockIPv4, "{IP}", ip, -1))
-		if err := cmd.Run(); err != nil {
-			log.Printf("Failed to block IPv4 %s using %s, error: %v", ip, fwEngine, err)
-		} else {
-			log.Printf("Blocked IPv4 %s using %s", ip, fwEngine)
-		}
+	blockCmd := exec.Command("sh", "-c", fmt.Sprintf("%s -A INPUT -s %s -j DROP", iptablesPath, ip))
+	if err := blockCmd.Run(); err != nil {
+		log.Printf("Failed to block IP %s using %s, error: %v", ip, fwEngine, err)
 	} else {
-		checkCmd := exec.Command("sh", "-c", strings.Replace(checkIPv6, "{IP}", ip, -1))
-		if err := checkCmd.Run(); err == nil {
-			log.Printf("IPv6 %s is already blocked", ip)
-			return
-		}
-
-		cmd := exec.Command("sh", "-c", strings.Replace(blockIPv6, "{IP}", ip, -1))
-		if err := cmd.Run(); err != nil {
-			log.Printf("Failed to block IPv6 %s using %s, error: %v", ip, fwEngine, err)
-		} else {
-			log.Printf("Blocked IPv6 %s using %s", ip, fwEngine)
-		}
+		log.Printf("Blocked IP %s using %s", ip, fwEngine)
 	}
+}
 
+// Fungsi untuk menyimpan aturan iptables
+func saveIptablesRules(netfilterPath string) {
 	saveCmd := exec.Command(netfilterPath, "save")
 	if err := saveCmd.Run(); err != nil {
-		log.Printf("Gagal menyimpan aturan iptables: %v", err)
+		log.Printf("Failed to save iptables rules: %v", err)
 	}
 }
 
