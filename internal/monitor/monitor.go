@@ -95,7 +95,7 @@ func processLogLine(hostname, line string, severity int) {
 		return
 	}
 
-	if shouldBlockIP(alert.SrcIP) {
+	if shouldBlockIP() {
 		firewall.BlockIP(alert.SrcIP)
 	}
 
@@ -124,7 +124,7 @@ func shouldIgnoreAlert(ip string) bool {
 	return false
 }
 
-func shouldBlockIP(ip string) bool {
+func shouldBlockIP() bool {
 	enableBlocking, err := strconv.ParseBool(os.Getenv("ENABLE_FIREWALL_BLOCKING"))
 	if err != nil {
 		log.Println("Invalid value for ENABLE_FIREWALL_BLOCKING, defaulting to false. ", err)
