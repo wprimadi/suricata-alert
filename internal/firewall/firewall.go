@@ -1,6 +1,7 @@
-package ip
+package firewall
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -34,7 +35,50 @@ func IsLocalIP(ip string) bool {
 	return false
 }
 
+func ensureUFWEnabled() error {
+	cmd := exec.Command("ufw", "status")
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to check UFW status: %s", err)
+	}
+
+	if !strings.Contains(string(output), "Status: active") {
+		log.Println("UFW is inactive, enabling it now...")
+		enableCmd := exec.Command("ufw", "enable")
+		if _, err := enableCmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("failed to enable UFW: %s", err)
+		}
+		log.Println("UFW enabled successfully.")
+	}
+	return nil
+}
+
 func BlockIP(ip string) {
+	var firewallEngine = os.Getenv("FIREWALL_ENGINE")
+
+	if firewallEngine == "ufw" {
+		if err := ensureUFWEnabled(); err != nil {
+			log.Printf(err.Error())
+		} else {
+			blockIPUsingUfw(ip, firewallEngine)
+		}
+	} else {
+		blockIPUsingIptables(ip, firewallEngine)
+	}
+
+}
+
+func blockIPUsingUfw(ip string, fwEngine string) {
+	cmd := exec.Command("ufw", "deny", "from", ip)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("error blocking IP %s: %s, %s", ip, err, string(output))
+		return
+	}
+	log.Printf("Blocked IP %s using %s", ip, fwEngine)
+}
+
+func blockIPUsingIptables(ip string, fwEngine string) {
 	checkIPv4 := "iptables -C INPUT -s {IP} -j DROP"
 	blockIPv4 := "iptables -A INPUT -s {IP} -j DROP"
 	checkIPv6 := "ip6tables -C INPUT -s {IP} -j DROP"
@@ -49,9 +93,9 @@ func BlockIP(ip string) {
 
 		cmd := exec.Command("sh", "-c", strings.Replace(blockIPv4, "{IP}", ip, -1))
 		if err := cmd.Run(); err != nil {
-			log.Printf("Failed to block IPv4: %s, error: %v", ip, err)
+			log.Printf("Failed to block IPv4 %s using %s, error: %v", ip, fwEngine, err)
 		} else {
-			log.Printf("Blocked IPv4: %s", ip)
+			log.Printf("Blocked IPv4 %s using %s", ip, fwEngine)
 		}
 	} else {
 		checkCmd := exec.Command("sh", "-c", strings.Replace(checkIPv6, "{IP}", ip, -1))
@@ -62,9 +106,9 @@ func BlockIP(ip string) {
 
 		cmd := exec.Command("sh", "-c", strings.Replace(blockIPv6, "{IP}", ip, -1))
 		if err := cmd.Run(); err != nil {
-			log.Printf("Failed to block IPv6: %s, error: %v", ip, err)
+			log.Printf("Failed to block IPv6 %s using %s, error: %v", ip, fwEngine, err)
 		} else {
-			log.Printf("Blocked IPv6: %s", ip)
+			log.Printf("Blocked IPv6 %s using %s", ip, fwEngine)
 		}
 	}
 

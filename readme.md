@@ -49,10 +49,42 @@ Suricata Alert is a Go-based tool that monitors Suricata's `eve.json` log file a
 
 ## Usage
 
-Run the application:
+⚠️ This application requires root privileges to modify firewall rules.
+You can run it directly using `sudo`:
 ```sh
-./suricata-alert
+sudo ./suricata-alert
 ```
+Or set it up as a systemd service (recommended):
+1. Create a systemd service file:
+   ```sh
+   sudo nano /etc/systemd/system/suricata-alert.service
+   ```
+   Add the following:
+   ```ini
+   [Unit]
+   Description=Suricata Alert Service
+   After=network.target
+
+   [Service]
+   Type=simple
+   ExecStart=/path/to/suricata-alert
+   Restart=always
+   User=root
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+   (Replace `/path/to/suricata-alert` with the actual path of the binary.)
+2. Enable and start the service:
+   ```sh
+   sudo systemctl daemon-reload
+   sudo systemctl enable suricata-alert
+   sudo systemctl start suricata-alert
+   ```
+3. Check service status:
+   ```sh
+   sudo systemctl status suricata-alert
+   ```
 The program will monitor `eve.json` for new alerts and send notifications to Telegram if the severity is below or equal to the configured threshold. If `IGNORE_LOCAL_IP` is enabled, alerts from local IPs will be ignored. If `ENABLE_FIREWALL_BLOCKING` is enabled, source IPs causing alerts will be blocked via `iptables` or `ip6tables`.
 
 ## Persistent IP Blocking
@@ -71,15 +103,27 @@ sudo netfilter-persistent reload
 ```
 
 ## Environment Variables
-| Variable                 | Description                                          |
-|--------------------------|------------------------------------------------------|
-| `EVE_FILE_PATH`         | Path to Suricata's `eve.json` log file              |
-| `SEVERITY_THRESHOLD`    | Maximum severity level to trigger alerts            |
-| `TELEGRAM_BOT_TOKEN`    | Telegram bot API token                              |
-| `TELEGRAM_CHAT_ID`      | Telegram chat ID where alerts are sent              |
-| `IGNORE_LOCAL_IP`       | If `true`, local IP alerts are ignored              |
-| `ENABLE_FIREWALL_BLOCKING` | If `true`, source IPs causing alerts are blocked  |
-| `WHITELIST_IP`     | Comma-separated list of IPs that will not be blocked or alerted |
+| Variable                   | Description                                                     |
+|----------------------------|-----------------------------------------------------------------|
+| `EVE_FILE_PATH`            | Path to Suricata's `eve.json` log file                          |
+| `SEVERITY_THRESHOLD`       | Maximum severity level to trigger alerts                        |
+| `TELEGRAM_BOT_TOKEN`       | Telegram bot API token                                          |
+| `TELEGRAM_CHAT_ID`         | Telegram chat ID where alerts are sent                          |
+| `IGNORE_LOCAL_IP`          | If `true`, local IP alerts are ignored                          |
+| `ENABLE_FIREWALL_BLOCKING` | If `true`, source IPs causing alerts are blocked                |
+| `FIREWALL_ENGINE`          | Firewall engine to use: `iptables` or `ufw`                     |
+| `WHITELIST_IP`             | Comma-separated list of IPs that will not be blocked or alerted |
+
+### Firewall Engine Options
+
+The `FIREWALL_ENGINE` environment variable allows you to choose the firewall method:
+- `iptables` (default): Uses `iptables` rules to block IPs.
+- `ufw`: Uses Uncomplicated Firewall (UFW) to block IPs.
+If you use `ufw`, ensure it is installed and active:
+```sh
+sudo apt install ufw -y
+sudo ufw enable
+```
 
 ## License
 This project is licensed under the MIT License.

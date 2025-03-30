@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"suricata-alert/internal/ip"
+	"suricata-alert/internal/firewall"
 	"suricata-alert/internal/telegram"
 )
 
@@ -49,9 +49,9 @@ func TailFile(hostname string, filePath string, severity int) {
 
 		if err := json.Unmarshal([]byte(line), &alert); err == nil {
 			if alert.EventType == "alert" && alert.Alert.Severity <= severity {
-				whitelist := ip.GetWhitelistedIPs()
+				whitelist := firewall.GetWhitelistedIPs()
 
-				if ip.IsLocalIP(alert.SrcIP) {
+				if firewall.IsLocalIP(alert.SrcIP) {
 					ignoreLocalIP, err := strconv.ParseBool(os.Getenv("IGNORE_LOCAL_IP"))
 					if err != nil {
 						sendAlert = true
@@ -75,7 +75,7 @@ func TailFile(hostname string, filePath string, severity int) {
 						}
 
 						if enableBlocking {
-							ip.BlockIP(alert.SrcIP)
+							firewall.BlockIP(alert.SrcIP)
 						}
 
 						sendAlert = true
