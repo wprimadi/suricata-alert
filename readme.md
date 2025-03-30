@@ -1,8 +1,13 @@
 # Suricata Alert
 
-![Go Version](https://img.shields.io/github/go-mod/go-version/wprimadi/suricata-alert)
-![License](https://img.shields.io/github/license/wprimadi/suricata-alert)
-![Stars](https://img.shields.io/github/stars/wprimadi/suricata-alert?style=social)
+![Go Version](https://img.shields.io/github/go-mod/go-version/wprimadi/suricata-alert) 
+![License](https://img.shields.io/github/license/wprimadi/suricata-alert) 
+![Stars](https://img.shields.io/github/stars/wprimadi/suricata-alert?style=social) 
+![Last Commit](https://img.shields.io/github/last-commit/wprimadi/suricata-alert) 
+![Go Report Card](https://goreportcard.com/badge/github.com/wprimadi/suricata-alert) 
+![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=wprimadi_suricata-alert&metric=alert_status) 
+![Codecov](https://codecov.io/gh/wprimadi/suricata-alert/branch/main/graph/badge.svg) 
+![Platform](https://img.shields.io/badge/platform-linux%20%7C%20macOS%20%7C%20windows-blue) 
 
 Suricata Alert is a Go-based tool that monitors Suricata's `eve.json` log file and sends security alerts to a Telegram chat when an event meets the configured severity threshold. It also supports optional IP blocking via firewall rules.
 

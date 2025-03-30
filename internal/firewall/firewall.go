@@ -9,25 +9,21 @@ import (
 	"strings"
 )
 
+var privateIPBlocks = []*net.IPNet{
+	{IP: net.IPv4(10, 0, 0, 0), Mask: net.CIDRMask(8, 32)},
+	{IP: net.IPv4(172, 16, 0, 0), Mask: net.CIDRMask(12, 32)},
+	{IP: net.IPv4(192, 168, 0, 0), Mask: net.CIDRMask(16, 32)},
+	{IP: net.IPv4(127, 0, 0, 1), Mask: net.CIDRMask(32, 32)},
+	{IP: net.IPv4(169, 254, 0, 0), Mask: net.CIDRMask(16, 32)},
+}
+
 func IsLocalIP(ip string) bool {
-	privateIPBlocks := []string{
-		"10.0.0.0/8",
-		"172.16.0.0/12",
-		"192.168.0.0/16",
-		"127.0.0.1/32",
-		"169.254.0.0/16",
-	}
 	parsedIP := net.ParseIP(ip)
 	if parsedIP == nil {
 		return false
 	}
 
-	for _, cidr := range privateIPBlocks {
-		_, ipNet, err := net.ParseCIDR(cidr)
-		if err != nil {
-			log.Printf("Error parsing CIDR %s: %v", cidr, err)
-			continue
-		}
+	for _, ipNet := range privateIPBlocks {
 		if ipNet.Contains(parsedIP) {
 			return true
 		}
@@ -36,7 +32,12 @@ func IsLocalIP(ip string) bool {
 }
 
 func ensureUFWEnabled() error {
-	cmd := exec.Command("ufw", "status")
+	ufwPath, err := exec.LookPath("ufw")
+	if err != nil {
+		return fmt.Errorf("ufw not found in PATH")
+	}
+
+	cmd := exec.Command(ufwPath, "status")
 	output, err := cmd.Output()
 	if err != nil {
 		return fmt.Errorf("failed to check UFW status: %s", err)
@@ -44,7 +45,7 @@ func ensureUFWEnabled() error {
 
 	if !strings.Contains(string(output), "Status: active") {
 		log.Println("UFW is inactive, enabling it now...")
-		enableCmd := exec.Command("ufw", "enable")
+		enableCmd := exec.Command(ufwPath, "enable")
 		if _, err := enableCmd.CombinedOutput(); err != nil {
 			return fmt.Errorf("failed to enable UFW: %s", err)
 		}
@@ -69,7 +70,13 @@ func BlockIP(ip string) {
 }
 
 func blockIPUsingUfw(ip string, fwEngine string) {
-	cmd := exec.Command("ufw", "deny", "from", ip)
+	ufwPath, err := exec.LookPath("ufw")
+	if err != nil {
+		log.Println("ufw not found in PATH")
+		return
+	}
+
+	cmd := exec.Command(ufwPath, "deny", "from", ip)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Printf("error blocking IP %s: %s, %s", ip, err, string(output))
@@ -79,10 +86,28 @@ func blockIPUsingUfw(ip string, fwEngine string) {
 }
 
 func blockIPUsingIptables(ip string, fwEngine string) {
-	checkIPv4 := "iptables -C INPUT -s {IP} -j DROP"
-	blockIPv4 := "iptables -A INPUT -s {IP} -j DROP"
-	checkIPv6 := "ip6tables -C INPUT -s {IP} -j DROP"
-	blockIPv6 := "ip6tables -A INPUT -s {IP} -j DROP"
+	iptablesPath, err := exec.LookPath("iptables")
+	if err != nil {
+		log.Println("iptables not found in PATH")
+		return
+	}
+
+	ip6tablesPath, err := exec.LookPath("ip6tables")
+	if err != nil {
+		log.Println("ip6tables not found in PATH")
+		return
+	}
+
+	netfilterPath, err := exec.LookPath("netfilter-persistent")
+	if err != nil {
+		log.Println("netfilter-persistent not found in PATH")
+		return
+	}
+
+	checkIPv4 := iptablesPath + " -C INPUT -s {IP} -j DROP"
+	blockIPv4 := iptablesPath + " -A INPUT -s {IP} -j DROP"
+	checkIPv6 := ip6tablesPath + " -C INPUT -s {IP} -j DROP"
+	blockIPv6 := ip6tablesPath + " -A INPUT -s {IP} -j DROP"
 
 	if net.ParseIP(ip).To4() != nil {
 		checkCmd := exec.Command("sh", "-c", strings.Replace(checkIPv4, "{IP}", ip, -1))
@@ -112,7 +137,7 @@ func blockIPUsingIptables(ip string, fwEngine string) {
 		}
 	}
 
-	saveCmd := exec.Command("sudo", "netfilter-persistent", "save")
+	saveCmd := exec.Command(netfilterPath, "save")
 	if err := saveCmd.Run(); err != nil {
 		log.Printf("Gagal menyimpan aturan iptables: %v", err)
 	}
