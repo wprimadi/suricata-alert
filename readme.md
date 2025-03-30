@@ -12,6 +12,7 @@ Suricata Alert is a Go-based tool that monitors Suricata's `eve.json` log file a
 - Sends notifications to Telegram
 - Ignores alerts from local IP addresses (configurable)
 - Blocks source IPs that trigger alerts (except local IPs)
+- Ensures blocked IPs persist across reboots
 
 ## Requirements
 - Go 1.18+
@@ -30,7 +31,13 @@ Suricata Alert is a Go-based tool that monitors Suricata's `eve.json` log file a
    ```sh
    go build -o suricata-alert
    ```
-3. Create a `.env` file in the project root:
+3. Ensures blocked IPs persist across reboots
+   ```sh
+   sudo apt update && sudo apt install -y iptables-persistent netfilter-persistent
+   sudo systemctl enable netfilter-persistent
+   sudo systemctl restart netfilter-persistent
+   ```
+4. Create a `.env` file in the project root:
    ```ini
    EVE_FILE_PATH=/var/log/suricata/eve.json
    SEVERITY_THRESHOLD=2
@@ -47,6 +54,21 @@ Run the application:
 ./suricata-alert
 ```
 The program will monitor `eve.json` for new alerts and send notifications to Telegram if the severity is below or equal to the configured threshold. If `IGNORE_LOCAL_IP` is enabled, alerts from local IPs will be ignored. If `ENABLE_FIREWALL_BLOCKING` is enabled, source IPs causing alerts will be blocked via `iptables` or `ip6tables`.
+
+## Persistent IP Blocking
+
+To ensure that blocked IPs remain after a system reboot, the tool automatically saves iptables rules using:
+```sh
+sudo netfilter-persistent save
+```
+You can manually verify the saved rules with:
+```sh
+sudo iptables -L -v -n
+```
+In case you need to restore saved rules after a reboot:
+```sh
+sudo netfilter-persistent reload
+```
 
 ## Environment Variables
 | Variable                 | Description                                          |

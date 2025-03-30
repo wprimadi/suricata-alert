@@ -67,6 +67,11 @@ func BlockIP(ip string) {
 			log.Printf("Blocked IPv6: %s", ip)
 		}
 	}
+
+	saveCmd := exec.Command("sudo", "netfilter-persistent", "save")
+	if err := saveCmd.Run(); err != nil {
+		log.Printf("Gagal menyimpan aturan iptables: %v", err)
+	}
 }
 
 func GetWhitelistedIPs() map[string]bool {
