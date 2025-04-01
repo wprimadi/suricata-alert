@@ -117,7 +117,7 @@ func shouldIgnoreAlert(ip string) bool {
 	}
 
 	if firewall.GetWhitelistedIPs()[ip] {
-		log.Printf("IP %s is whitelisted, skipping Telegram alert\n", ip)
+		log.Printf("IP %s is whitelisted, skipping Telegram alert", ip)
 		return true
 	}
 

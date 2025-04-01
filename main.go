@@ -5,23 +5,38 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"suricata-alert/internal/config"
+	permission "suricata-alert/internal/linux_permission"
 	"suricata-alert/internal/logger"
 	"suricata-alert/internal/monitor"
 )
 
 func main() {
+	// Initialize logger
+	logger.InitLogger()
+	log.Println("Starting Suricata Alert...")
+
+	log.Printf("Checking operating system: %s", runtime.GOOS)
+	if strings.ToLower(runtime.GOOS) == "linux" {
+		isRoot, err := permission.CheckLinuxRootPermission()
+		if err != nil {
+			log.Fatal("Error checking for operating system user permission: ", err)
+		}
+
+		if !isRoot {
+			log.Fatal("Sorry, this program requires root privileges to run. Please execute it with sudo or as the root user.")
+		}
+	}
+
 	// Load configuration
 	if err := config.LoadEnv(); err != nil {
 		log.Fatal("Error loading environment variables: ", err)
 	}
-
-	// Initialize logger
-	logger.InitLogger()
-	log.Println("Starting Suricata Alert Bot...")
 
 	// Get current OS hostname
 	hostname, err := os.Hostname()
