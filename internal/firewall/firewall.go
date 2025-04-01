@@ -76,7 +76,7 @@ func blockIPUsingUfw(ip string, fwEngine string) {
 		return
 	}
 
-	cmd := exec.Command(ufwPath, "deny", "from", ip)
+	cmd := exec.Command(ufwPath, "insert", "1", "deny", "from", ip)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Printf("error blocking IP %s: %s, %s", ip, err, string(output))
